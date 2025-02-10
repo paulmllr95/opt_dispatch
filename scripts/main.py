@@ -6,9 +6,17 @@ import pandas as pd
 # https://echtsolar.de/preise-solarmodule
 
 # Ensure the project root is in the Python path
+if '__file__' not in globals():
+    __file__ = os.path.abspath(sys.argv[0])
+
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-print(project_root)
+scripts_path = os.path.join(project_root, 'scripts')
+print("Project root:", project_root)
 sys.path.append(project_root)
+sys.path.append(scripts_path)  # Add the scripts directory to the Python path
+
+# Debug print to verify sys.path
+print("sys.path:", sys.path)
 
 from scripts.utils.data_loader import DataLoader
 from scripts.optimizations.battery_operation import BatteryOptimization
