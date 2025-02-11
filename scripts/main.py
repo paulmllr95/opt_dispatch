@@ -1,24 +1,15 @@
 import sys
 import os
-import numpy as np
 import pandas as pd
 
 # https://echtsolar.de/preise-solarmodule
 
-# Ensure the project root is in the Python path
-if '__file__' not in globals():
-    __file__ = os.path.abspath(sys.argv[0])
+# Pfad zum Projektverzeichnis hinzufügen
+PROJECT_ROOT = "/workspaces/opt_dispatch_"  # <- Passe diesen Pfad an, falls nötig
+sys.path.insert(0, PROJECT_ROOT)
+sys.path.insert(0, os.path.join(PROJECT_ROOT, "scripts"))  # Falls 'scripts' ein Modul ist
 
-project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-scripts_path = os.path.join(project_root, 'scripts')
-print("Project root:", project_root)
-sys.path.append(project_root)
-sys.path.append(scripts_path)  # Add the scripts directory to the Python path
-
-# Debug print to verify sys.path
-print("sys.path:", sys.path)
-
-from scripts.utils.data_loader import DataLoader
+from scripts.utils.data_loader import load_data
 from scripts.optimizations.battery_operation import BatteryOptimization
 from scripts.utils.plotter import Plotter
 from scripts.utils.calculate_profit import calculate_battery_profit, calculate_pv_profit, calculate_investment_costs, calculate_effective_profit_buy, calculate_total_profit  # Import the updated functions
@@ -30,28 +21,25 @@ from scripts.utils.csv_saver import save_results_to_csv  # Import the new functi
 X = 20  # Number of years to extend
 soc_range = (1320,1400)  # Plot window for SOC and electricity prices (e.g., first week)
 profit_range = (0, 8760 * X)  # Plot window for cumulative profit (e.g., entire period)
-year = "2024" # Year of the data
+year = "2023" # Year of the data
 leap_year_switch = True  # Set to True if year is a leap year
 battery_integration = False  # Set to True to include battery storage in the optimization
 pv_integration = True  # Set to True to include PV system in the optimization
 fixed_purchase_price = True  # Set to True to use a fixed electricity price for grid purchases
 
 # Load parameters
-params_file_path = r'C:\Users\Paul\OneDrive\Desktop\Batteriespeicheroptimierung\01_data\params.csv'
+params_file_path = os.path.join(PROJECT_ROOT, 'data', 'params.csv')
 params = load_params(params_file_path, battery_integration, pv_integration)
 
 # Load data
-price_file_path = f'C:\\Users\\Paul\\OneDrive\\Desktop\\Batteriespeicheroptimierung\\01_data\\{year}\\price_data.csv'
-pv_file_path = f'C:\\Users\\Paul\\OneDrive\\Desktop\\Batteriespeicheroptimierung\\01_data\\{year}\\pv_data.csv'
-load_profile_path = f'C:\\Users\\Paul\\OneDrive\\Desktop\\Batteriespeicheroptimierung\\01_data\\{year}\\load_profile.csv'
-data_loader = DataLoader(price_file_path, pv_file_path, load_profile_path, params_file_path, leap_year_switch, pv_integration)
-price_data, pv_data, load_profile_data = data_loader.load_and_clean_data()
+price_file_path = os.path.join(PROJECT_ROOT, 'data', year, 'price_data.csv')
+pv_file_path = os.path.join(PROJECT_ROOT, 'data', year, 'pv_data.csv')
+load_profile_path = os.path.join(PROJECT_ROOT, 'data', year, 'load_profile.csv')
+
+prices, pv_output, load_profile, timestamps = load_data(price_file_path, pv_file_path, load_profile_path, leap_year_switch)
 
 # Normalize data
-price_data, pv_data, load_profile_data = normalize_data(price_data, pv_data, load_profile_data, params, pv_integration)
-prices = price_data['Price (EUR/kWh)'].values  # Use EUR/kWh
-pv_output = pv_data['PV Output (Normalized)'].values
-load_profile = load_profile_data.values
+prices, pv_output, load_profile = normalize_data(prices, pv_output, load_profile, params, pv_integration)
 
 # Select optimization type
 optimization_type = "perfect_foresight"  # "perfect_foresight" or "day_ahead"
@@ -70,11 +58,11 @@ extended_effective_profit_from_purchase = calculate_effective_profit_buy(params,
 total_profit = calculate_total_profit(extended_profit_battery, extended_profit_pv, extended_effective_profit_from_purchase, power_electronics_cost)
 
 # Save results to CSV
-save_results_to_csv(year, price_data, results, prices, load_profile, params, total_profit)
+save_results_to_csv(year, prices, results, load_profile, params, total_profit)
 
 # Extend the dates for X years
-extended_dates = pd.date_range(start=price_data['Datetime'].iloc[0], periods=len(price_data['Datetime']) * X, freq='h')
+extended_dates = pd.date_range(start=timestamps[0], periods=len(timestamps) * X, freq='h')
 
 # Plot results
 plotter = Plotter()
-plotter.plot_results(extended_dates, price_data, results['soc'], results['charge_from_grid'], results['charge_from_pv'], results['use_pv'], results['use_battery'], results['sell_pv'], results['buy_from_grid'], extended_profit_battery, extended_profit_pv, extended_effective_profit_from_purchase, total_profit, soc_range, profit_range, optimization_type.title(), power_electronics_cost, params)
+plotter.plot_results(extended_dates, prices, results['soc'], results['charge_from_grid'], results['charge_from_pv'], results['use_pv'], results['use_battery'], results['sell_pv'], results['buy_from_grid'], extended_profit_battery, extended_profit_pv, extended_effective_profit_from_purchase, total_profit, soc_range, profit_range, optimization_type.title(), power_electronics_cost, params)
